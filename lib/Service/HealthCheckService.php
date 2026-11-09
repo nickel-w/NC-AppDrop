@@ -19,13 +19,21 @@ class HealthCheckService {
 	private const APPID_PATTERN = '/^[a-z0-9_]{3,64}$/';
 	private const NAMESPACE_PATTERN = '/^[A-Z][a-zA-Z0-9]*$/';
 
+	public function __construct(
+		private readonly RequirementChecker $requirements,
+		private readonly UpdateEligibilityService $eligibility,
+	) {
+	}
+
 	/**
 	 * Analyze a zip file and return a health report.
 	 *
 	 * @param string $zipPath Path to the temporary zip file
+	 * @param string[]|null $updateOnlyApps null for users with full upload permission;
+	 *                                      otherwise the apps the user may update (adds update-permission checks)
 	 * @return array{checks: array[], errors: string[], warnings: string[], appId: string, version: string, name: string, icon: ?string}
 	 */
-	public function analyze(string $zipPath): array {
+	public function analyze(string $zipPath, ?array $updateOnlyApps = null): array {
 		$checks = [];
 		$errors = [];
 		$warnings = [];
@@ -247,31 +255,51 @@ class HealthCheckService {
 			}
 		}
 
-		// ── Nextcloud version dependency ─────────────────────────────────────
-		$ncDeps = $xml->dependencies->nextcloud ?? null;
-		if ($ncDeps === null) {
-			$checks[] = ['label' => 'Nextcloud Compatibility', 'status' => 'warn', 'detail' => 'No Nextcloud version dependency declared.', 'fix' => 'Add <dependencies><nextcloud min-version="30" max-version="33"/></dependencies> to info.xml.'];
-			$warnings[] = 'No Nextcloud version dependency declared.';
-		} else {
-			$minNc = (string)($ncDeps['min-version'] ?? '');
-			$maxNc = (string)($ncDeps['max-version'] ?? '');
-			$range = ($minNc !== '' ? $minNc : '?') . ' – ' . ($maxNc !== '' ? $maxNc : '?');
-			$checks[] = ['label' => 'Nextcloud Compatibility', 'status' => 'pass', 'detail' => "NC {$range}"];
+		// ── Requirements: Nextcloud, PHP, PHP extensions ─────────────────────
+		foreach ($this->requirements->evaluate($xml) as $req) {
+			if ($req['key'] === 'nextcloud') {
+				if (!$req['declared']) {
+					$checks[] = ['label' => 'Nextcloud Compatibility', 'status' => 'warn', 'detail' => 'No Nextcloud version dependency declared.', 'fix' => 'Add <dependencies><nextcloud min-version="30" max-version="35"/></dependencies> to info.xml.'];
+					$warnings[] = 'No Nextcloud version dependency declared.';
+				} elseif ($req['ok']) {
+					$checks[] = ['label' => 'Nextcloud Compatibility', 'status' => 'pass', 'detail' => $req['message']];
+				} else {
+					$checks[] = ['label' => 'Nextcloud Compatibility', 'status' => 'warn', 'detail' => $req['message'], 'fix' => 'Nextcloud will refuse to enable this app. Use a package built for this Nextcloud version, or adjust min-version/max-version in info.xml if your code supports it.'];
+					$warnings[] = $req['message'];
+				}
+			} elseif ($req['key'] === 'php') {
+				if (!$req['declared']) {
+					$checks[] = ['label' => 'PHP Compatibility', 'status' => 'warn', 'detail' => 'No PHP version requirement declared.', 'fix' => 'Add <php min-version="8.1"/> inside <dependencies> in info.xml.'];
+					$warnings[] = 'No PHP version requirement declared.';
+				} elseif ($req['ok']) {
+					$checks[] = ['label' => 'PHP Compatibility', 'status' => 'pass', 'detail' => $req['message']];
+				} else {
+					$checks[] = ['label' => 'PHP Compatibility', 'status' => 'fail', 'detail' => $req['message'], 'fix' => 'Change the PHP version on this server, or adjust the PHP min-version/max-version in info.xml if your code supports it.'];
+					$errors[] = $req['message'];
+				}
+			} else {
+				$label = 'PHP Extension (' . substr($req['key'], 4) . ')';
+				if ($req['ok']) {
+					$checks[] = ['label' => $label, 'status' => 'pass', 'detail' => $req['message']];
+				} else {
+					$checks[] = ['label' => $label, 'status' => 'warn', 'detail' => $req['message'], 'fix' => 'Install and enable the PHP extension on this server.'];
+					$warnings[] = $req['message'];
+				}
+			}
 		}
 
-		// ── PHP version check ────────────────────────────────────────────────
-		$phpDeps = $xml->dependencies->php ?? null;
-		if ($phpDeps !== null) {
-			$minPhp = (string)($phpDeps['min-version'] ?? '');
-			if ($minPhp !== '' && version_compare(PHP_VERSION, $minPhp, '<')) {
-				$checks[] = ['label' => 'PHP Compatibility', 'status' => 'fail', 'detail' => "Requires PHP >= {$minPhp}, server runs " . PHP_VERSION . '.', 'fix' => "Upgrade PHP to {$minPhp}+ on this server, or lower the min-version in info.xml if your code supports it."];
-				$errors[] = "Requires PHP >= {$minPhp}, but server runs PHP " . PHP_VERSION . '.';
-			} elseif ($minPhp !== '') {
-				$checks[] = ['label' => 'PHP Compatibility', 'status' => 'pass', 'detail' => "Requires PHP >= {$minPhp}, server runs " . PHP_VERSION . '.'];
+		// ── Per-app update permission (restricted users only) ────────────────
+		if ($updateOnlyApps !== null) {
+			$problems = $this->eligibility->problems($xml, $updateOnlyApps);
+			if ($problems === []) {
+				$installed = $this->eligibility->getInstalledVersion($appId) ?? '?';
+				$checks[] = ['label' => 'Update permission', 'status' => 'pass', 'detail' => "You may update '{$appId}' from v{$installed} to v{$version}."];
+			} else {
+				foreach ($problems as $problem) {
+					$checks[] = ['label' => $problem['label'], 'status' => 'fail', 'detail' => $problem['detail'], 'fix' => 'Your account may only update specific installed apps to a newer version that meets all requirements of this server. Ask an administrator if you need more.'];
+					$errors[] = $problem['detail'];
+				}
 			}
-		} else {
-			$checks[] = ['label' => 'PHP Compatibility', 'status' => 'warn', 'detail' => 'No PHP version requirement declared.', 'fix' => 'Add <php min-version="8.1"/> inside <dependencies> in info.xml.'];
-			$warnings[] = 'No PHP version requirement declared.';
 		}
 
 		return $this->buildResult($checks, $errors, $warnings, $appId, $version, $name, $iconData);

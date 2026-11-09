@@ -50,6 +50,22 @@ trait AdminAuthTrait {
 		return $this->permissionService->canUpload($user);
 	}
 
+	/**
+	 * What the current user may upload.
+	 *
+	 * @return string[]|null null = unrestricted (install and update any app);
+	 *                       otherwise the app IDs the user may update ([] = no access)
+	 */
+	private function uploadScope(): ?array {
+		if ($this->canUpload()) {
+			return null;
+		}
+		if (!isset($this->permissionService) || !($this->permissionService instanceof PermissionService)) {
+			return [];
+		}
+		return $this->permissionService->getUpdatableApps($this->userSession->getUser());
+	}
+
 	private function denyIfCannotUpload(): ?JSONResponse {
 		if (!$this->canUpload()) {
 			return new JSONResponse(['success' => false, 'message' => 'Access denied.'], 403);

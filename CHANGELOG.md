@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Nextcloud 34 and 35 support (`max-version="35"`)
+- Per-app update permissions: admins can allow individual users or groups to update specific installed apps (Permissions tab). These users only see the Upload tab, cannot install new apps or change whether an app is enabled, and an update is only accepted if the package is newer than the installed version and meets all requirements of the server (Nextcloud min/max version, PHP min/max version, `<lib>` PHP extensions)
+- Health check compares the package's Nextcloud range with the running server and checks PHP max-version and required PHP extensions
+- PHP 8.5 added to the CI test matrix (PHP 8.2 removed from CI: `nextcloud/ocp` 35 requires PHP 8.3+)
+
+### Changed
+- Development dependency `nextcloud/ocp` raised to `^35.0` (Composer platform PHP 8.3); release-signing container uses `nextcloud:35`
+
 ## [1.4.0] - 2026-09-09
 
 ### Added

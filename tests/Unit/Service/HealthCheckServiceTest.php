@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace OCA\AppDrop\Tests\Unit\Service;
 
+use OCA\AppDrop\Service\AppPathResolver;
 use OCA\AppDrop\Service\HealthCheckService;
+use OCA\AppDrop\Service\RequirementChecker;
+use OCA\AppDrop\Service\UpdateEligibilityService;
+use OCP\IConfig;
 use PHPUnit\Framework\TestCase;
 
 class HealthCheckServiceTest extends TestCase {
@@ -12,13 +16,28 @@ class HealthCheckServiceTest extends TestCase {
 	private string $tmpDir;
 
 	protected function setUp(): void {
-		$this->service = new HealthCheckService();
 		$this->tmpDir = sys_get_temp_dir() . '/appdrop_test_' . uniqid();
 		mkdir($this->tmpDir, 0755, true);
+		mkdir($this->tmpDir . '/apps', 0755, true);
+
+		$config = $this->createMock(IConfig::class);
+		$config->method('getSystemValueString')->willReturnCallback(
+			static fn (string $key, string $default = '') => $key === 'version' ? '32.0.4.1' : $default,
+		);
+		$pathResolver = $this->createMock(AppPathResolver::class);
+		$pathResolver->method('resolveWritablePath')->willReturn($this->tmpDir . '/apps');
+		$requirements = new RequirementChecker($config);
+		$this->service = new HealthCheckService($requirements, new UpdateEligibilityService($pathResolver, $requirements));
 	}
 
 	protected function tearDown(): void {
-		array_map('unlink', glob($this->tmpDir . '/*') ?: []);
+		$it = new \RecursiveIteratorIterator(
+			new \RecursiveDirectoryIterator($this->tmpDir, \FilesystemIterator::SKIP_DOTS),
+			\RecursiveIteratorIterator::CHILD_FIRST,
+		);
+		foreach ($it as $item) {
+			$item->isDir() ? rmdir($item->getPathname()) : unlink($item->getPathname());
+		}
 		@rmdir($this->tmpDir);
 	}
 
@@ -407,5 +426,59 @@ class HealthCheckServiceTest extends TestCase {
 			}
 		}
 		$this->fail("Check '{$label}' not found in result.");
+	}
+
+	// =========================================================================
+	// Requirements and per-app update permission
+	// =========================================================================
+
+	private function installExisting(string $id, string $version): void {
+		mkdir($this->tmpDir . '/apps/' . $id . '/appinfo', 0755, true);
+		file_put_contents(
+			$this->tmpDir . '/apps/' . $id . '/appinfo/info.xml',
+			"<?xml version=\"1.0\"?><info><id>{$id}</id><version>{$version}</version></info>",
+		);
+	}
+
+	public function testNextcloudVersionOutOfRangeIsWarningForFullUploaders(): void {
+		$xml = str_replace('max-version="32"', 'max-version="31"', $this->validInfoXml());
+		$result = $this->service->analyze($this->createZip(['test_app/appinfo/info.xml' => $xml]));
+
+		$check = $this->findCheck($result, 'Nextcloud Compatibility');
+		$this->assertSame('warn', $check['status']);
+		$this->assertStringContainsString('up to 31', $check['detail']);
+		$this->assertSame([], $result['errors']);
+	}
+
+	public function testUpdateOnlyPassesForGrantedNewerCompatibleApp(): void {
+		$this->installExisting('test_app', '1.0.0');
+		$result = $this->service->analyze(
+			$this->createZip(['test_app/appinfo/info.xml' => $this->validInfoXml('test_app', '1.2.0')]),
+			['test_app'],
+		);
+
+		$this->assertSame('pass', $this->findCheck($result, 'Update permission')['status']);
+		$this->assertSame([], $result['errors']);
+	}
+
+	public function testUpdateOnlyFailsForAppNotGranted(): void {
+		$this->installExisting('test_app', '1.0.0');
+		$result = $this->service->analyze(
+			$this->createZip(['test_app/appinfo/info.xml' => $this->validInfoXml('test_app', '1.2.0')]),
+			['other_app'],
+		);
+
+		$this->assertSame('fail', $this->findCheck($result, 'Update permission')['status']);
+		$this->assertNotEmpty($result['errors']);
+	}
+
+	public function testUpdateOnlyFailsForIncompatibleNextcloudAndOldVersion(): void {
+		$this->installExisting('test_app', '1.0.0');
+		$xml = str_replace('max-version="32"', 'max-version="31"', $this->validInfoXml('test_app', '1.0.0'));
+		$result = $this->service->analyze($this->createZip(['test_app/appinfo/info.xml' => $xml]), ['test_app']);
+
+		$this->assertSame('fail', $this->findCheck($result, 'App version')['status']);
+		$this->assertSame('fail', $this->findCheck($result, 'Requirements')['status']);
+		$this->assertCount(2, $result['errors']);
 	}
 }

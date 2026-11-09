@@ -12,13 +12,16 @@ declare(strict_types=1);
 
 $error = $_['error'] ?? '';
 $isAdmin = $_['isAdmin'] ?? false;
+$canUploadAll = $_['canUploadAll'] ?? false;
 
 \OCP\Util::addStyle('appdrop', 'admin');
 \OCP\Util::addScript('appdrop', 'navigation');
 \OCP\Util::addScript('appdrop', 'upload');
 \OCP\Util::addScript('appdrop', 'apps');
-\OCP\Util::addScript('appdrop', 'history');
-\OCP\Util::addScript('appdrop', 'templates');
+if ($canUploadAll) {
+	\OCP\Util::addScript('appdrop', 'history');
+	\OCP\Util::addScript('appdrop', 'templates');
+}
 \OCP\Util::addScript('appdrop', 'backups');
 if ($isAdmin) {
 	\OCP\Util::addScript('appdrop', 'permissions');
@@ -51,6 +54,7 @@ if ($isAdmin) {
                 </a>
             </li>
             <?php endif; ?>
+            <?php if ($canUploadAll): ?>
             <li data-section="history">
                 <a href="#history">
                     <svg class="aum-nav-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -76,6 +80,7 @@ if ($isAdmin) {
                     <?php p($l->t('Generator')); ?>
                 </a>
             </li>
+            <?php endif; ?>
             <?php if ($isAdmin): ?>
             <li data-section="backups">
                 <a href="#backups">
@@ -126,12 +131,14 @@ if ($isAdmin) {
             <?php require __DIR__ . '/partials/apps.php'; ?>
         </div>
         <?php endif; ?>
+        <?php if ($canUploadAll): ?>
         <div class="aum-section" data-section="history">
             <?php require __DIR__ . '/partials/history.php'; ?>
         </div>
         <div class="aum-section" data-section="generator">
             <?php require __DIR__ . '/partials/templates.php'; ?>
         </div>
+        <?php endif; ?>
         <?php if ($isAdmin): ?>
         <div class="aum-section" data-section="backups">
             <?php require __DIR__ . '/partials/backups.php'; ?>

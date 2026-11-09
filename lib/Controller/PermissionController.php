@@ -114,6 +114,67 @@ class PermissionController extends Controller {
 	}
 
 	/**
+	 * Per-app update permissions: { appId: { users: [], groups: [] } }.
+	 */
+	#[NoCSRFRequired]
+	public function getUpdateGrants(): JSONResponse {
+		$denied = $this->denyIfNotAdmin();
+		if ($denied !== null) {
+			return $denied;
+		}
+
+		return new JSONResponse([
+			'success' => true,
+			'grants' => (object)$this->permissionService->getUpdateGrants(),
+		]);
+	}
+
+	/**
+	 * Allow a user or group to update one specific app.
+	 * Body: { appId, type: "user"|"group", id }
+	 */
+	public function addUpdateGrant(): JSONResponse {
+		return $this->changeUpdateGrant(true);
+	}
+
+	public function removeUpdateGrant(): JSONResponse {
+		return $this->changeUpdateGrant(false);
+	}
+
+	private function changeUpdateGrant(bool $add): JSONResponse {
+		$denied = $this->denyIfNotAdmin();
+		if ($denied !== null) {
+			return $denied;
+		}
+
+		$params = json_decode(file_get_contents('php://input') ?: '', true);
+		$params = is_array($params) ? $params : [];
+		$appId = trim((string)($params['appId'] ?? ''));
+		$type = trim((string)($params['type'] ?? ''));
+		$id = trim((string)($params['id'] ?? ''));
+
+		if ($add && $type === 'user' && $id !== '' && !$this->userManager->userExists($id)) {
+			return new JSONResponse(['success' => false, 'message' => "User '{$id}' does not exist."], 400);
+		}
+		if ($add && $type === 'group' && $id !== '' && !$this->groupManager->groupExists($id)) {
+			return new JSONResponse(['success' => false, 'message' => "Group '{$id}' does not exist."], 400);
+		}
+
+		try {
+			if ($add) {
+				$this->permissionService->addUpdateGrant($appId, $type, $id);
+			} else {
+				$this->permissionService->removeUpdateGrant($appId, $type, $id);
+			}
+		} catch (\InvalidArgumentException $e) {
+			return new JSONResponse(['success' => false, 'message' => $e->getMessage()], 400);
+		}
+
+		$verb = $add ? 'may now update' : 'may no longer update';
+		return new JSONResponse(['success' => true, 'message' => ucfirst($type) . " '{$id}' {$verb} '{$appId}'."]);
+	}
+
+	/**
 	 * Search users for autocomplete.
 	 */
 	#[NoCSRFRequired]

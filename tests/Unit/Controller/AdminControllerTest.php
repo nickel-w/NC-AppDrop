@@ -232,4 +232,58 @@ class AdminControllerTest extends TestCase {
 		$this->assertFalse($data['success']);
 		$this->assertStringContainsString('Unexpected error', $data['message']);
 	}
+
+	// =========================================================================
+	// Per-app update permission
+	// =========================================================================
+
+	private function mockUpdateOnlyUser(array $apps): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('updater');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->groupManager->method('isInGroup')->willReturn(false);
+		$this->permissionService->method('canUpload')->willReturn(false);
+		$this->permissionService->method('getUpdatableApps')->willReturn($apps);
+	}
+
+	public function testIndexForUpdateOnlyUserShowsRestrictedUpload(): void {
+		$this->mockUpdateOnlyUser(['dropdemo']);
+
+		$response = $this->controller->index();
+
+		$this->assertSame(TemplateResponse::RENDER_AS_USER, $response->getRenderAs());
+		$params = $response->getParams();
+		$this->assertFalse($params['isAdmin']);
+		$this->assertFalse($params['canUploadAll']);
+		$this->assertSame(['dropdemo'], $params['updatableApps']);
+	}
+
+	public function testInstallForUpdateOnlyUserRestrictsToGrantedAppsAndNeverAutoEnables(): void {
+		$this->mockUpdateOnlyUser(['dropdemo']);
+		$file = ['name' => 'dropdemo.zip', 'tmp_name' => '/tmp/phpXXXXXX', 'error' => UPLOAD_ERR_OK];
+		$this->request->method('getUploadedFile')->willReturn($file);
+		$this->request->method('getParam')->willReturn('1');
+
+		$this->installService->expects($this->once())
+			->method('install')
+			->with($file, false, ['dropdemo'])
+			->willReturn(['success' => true, 'message' => 'ok', 'appId' => 'dropdemo', 'version' => '1.1.0', 'name' => 'Demo', 'isUpdate' => true, 'previousVersion' => '1.0.0']);
+
+		$response = $this->controller->install();
+		$this->assertTrue($response->getData()['success']);
+	}
+
+	public function testInstallForFullUploaderIsUnrestricted(): void {
+		$this->mockAdminUser();
+		$file = ['name' => 'x.zip', 'tmp_name' => '/tmp/phpXXXXXX', 'error' => UPLOAD_ERR_OK];
+		$this->request->method('getUploadedFile')->willReturn($file);
+		$this->request->method('getParam')->willReturn('1');
+
+		$this->installService->expects($this->once())
+			->method('install')
+			->with($file, true)
+			->willReturn(['success' => true, 'message' => 'ok', 'appId' => 'x', 'version' => '1', 'name' => 'x', 'isUpdate' => false, 'previousVersion' => null]);
+
+		$this->controller->install();
+	}
 }

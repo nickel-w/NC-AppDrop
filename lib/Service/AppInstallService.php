@@ -40,6 +40,7 @@ class AppInstallService {
 		private readonly IConfig $config,
 		private readonly AppUpgradeService $upgrader,
 		private readonly LoggerInterface $logger,
+		private readonly UpdateEligibilityService $eligibility,
 	) {
 	}
 
@@ -52,9 +53,12 @@ class AppInstallService {
 	 * Install or update an app from an uploaded zip file.
 	 *
 	 * @param array $file $_FILES-style array from IRequest::getUploadedFile()
+	 * @param string[]|null $updateOnlyApps null = unrestricted. Otherwise only an
+	 *                                      update of one of these installed apps to a newer version whose
+	 *                                      requirements are met is accepted, and the app's enabled state is kept.
 	 * @return array{success: bool, message: string, appId: string, version: string, name: string, isUpdate: bool, previousVersion: ?string}
 	 */
-	public function install(array $file, bool $autoEnable = true): array {
+	public function install(array $file, bool $autoEnable = true, ?array $updateOnlyApps = null): array {
 		$this->validateUploadedFile($file);
 		$tempPath = $this->storeToTemp($file);
 
@@ -69,6 +73,21 @@ class AppInstallService {
 					'Cannot update AppDrop through itself. '
 					. 'Please update via occ, the Nextcloud app store, or by replacing the files manually.',
 				);
+			}
+
+			if ($updateOnlyApps !== null) {
+				// Users with per-app update permission must not change which apps are enabled.
+				$autoEnable = false;
+				$xml = simplexml_load_string($zipInfo['infoXml']);
+				if ($xml === false) {
+					throw new AppInstallException('Could not parse info.xml from the zip archive.');
+				}
+				$problems = $this->eligibility->problems($xml, $updateOnlyApps);
+				if ($problems !== []) {
+					throw new AppInstallException(
+						'Update not allowed: ' . implode(' ', array_column($problems, 'detail')),
+					);
+				}
 			}
 
 			$basePath = $this->pathResolver->resolveWritablePath();
@@ -185,7 +204,7 @@ class AppInstallService {
 	 * Validate all zip entries (Zip Slip protection) and extract app info
 	 * from the embedded appinfo/info.xml.
 	 *
-	 * @return array{appId: string, version: string, name: string, topLevelPrefix: string}
+	 * @return array{appId: string, version: string, name: string, topLevelPrefix: string, infoXml: string}
 	 */
 	private function validateAndAnalyzeZip(string $zipPath): array {
 		$zip = new \ZipArchive();
@@ -245,6 +264,7 @@ class AppInstallService {
 
 		$info = $this->parseInfoXml($infoXmlContent);
 		$info['topLevelPrefix'] = $topLevelPrefix;
+		$info['infoXml'] = $infoXmlContent;
 
 		return $info;
 	}

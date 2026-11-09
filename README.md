@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/cdnCore-Pt/AppDrop/actions/workflows/ci.yml/badge.svg)](https://github.com/cdnCore-Pt/AppDrop/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Nextcloud: 30-33](https://img.shields.io/badge/Nextcloud-30--33-0082c9.svg)](https://apps.nextcloud.com/apps/appdrop)
+[![Nextcloud: 30-35](https://img.shields.io/badge/Nextcloud-30--35-0082c9.svg)](https://apps.nextcloud.com/apps/appdrop)
 [![PHP: 8.1+](https://img.shields.io/badge/PHP-8.1%2B-777BB4.svg)](https://www.php.net/)
 [![Built by cdnCore](https://img.shields.io/badge/Built_by-cdnCore-1f2937.svg)](https://cdncore.eu/)
 
@@ -21,12 +21,13 @@ Upload, validate and install custom Nextcloud app packages (.zip) directly from 
 - **Template Generator** — Generate and download a ready-to-develop Nextcloud app skeleton
 - **Upload History** — Log of all uploads with status and timestamps
 - **Permission system** — Admins can grant upload access to specific users and groups
+- **Per-app update permissions** — Admins can allow users or groups to *update* specific installed apps (no new installs). An update is only accepted if the package is newer than the installed version and the server meets all of its requirements (Nextcloud version, PHP version, PHP extensions)
 - **Dark & light theme** — Full support via Nextcloud CSS variables
 
 ## Requirements
 
-- Nextcloud 30 – 33
-- PHP 8.1+
+- Nextcloud 30 – 35
+- PHP 8.1+ (tested up to 8.5)
 
 ## Installation
 
@@ -67,7 +68,7 @@ Once enabled, **AppDrop** appears in the top navigation bar.
 | **History** | Permitted users | View past uploads with status |
 | **Generator** | Permitted users | Download a Nextcloud app skeleton to start developing |
 | **Backups** | Admins | Restore or delete backups from previous updates |
-| **Permissions** | Admins | Grant or revoke upload access to users and groups |
+| **Permissions** | Admins | Grant or revoke upload access to users and groups, and per-app update permissions |
 
 ### Settings
 

@@ -30,7 +30,7 @@
         <admin>https://github.com/cdnCore-Pt/AppDrop#usage</admin>
     </documentation>
     <dependencies>
-        <nextcloud min-version="30" max-version="33"/>
+        <nextcloud min-version="30" max-version="35"/>
         <php min-version="8.1"/>
     </dependencies>
     <!-- Navigation is registered dynamically in Application::boot()
