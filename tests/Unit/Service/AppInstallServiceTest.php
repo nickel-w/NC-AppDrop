@@ -8,6 +8,8 @@ use OCA\AppDrop\Service\AppInstallException;
 use OCA\AppDrop\Service\AppInstallService;
 use OCA\AppDrop\Service\AppPathResolver;
 use OCA\AppDrop\Service\AppUpgradeService;
+use OCA\AppDrop\Service\RequirementChecker;
+use OCA\AppDrop\Service\UpdateEligibilityService;
 use OCP\App\IAppManager;
 use OCP\IConfig;
 use OCP\ITempManager;
@@ -38,6 +40,7 @@ class AppInstallServiceTest extends TestCase {
 			$this->config,
 			new AppUpgradeService($this->appManager, $this->config, $this->logger),
 			$this->logger,
+			new UpdateEligibilityService($this->pathResolver, new RequirementChecker($this->config)),
 		);
 	}
 
@@ -227,14 +230,14 @@ class AppInstallServiceTest extends TestCase {
 		return $dir;
 	}
 
-	private function makeAppZip(string $dir, string $appId, string $version): string {
+	private function makeAppZip(string $dir, string $appId, string $version, string $deps = ''): string {
 		$path = $dir . '/' . $appId . '-' . $version . '.zip';
 		$zip = new \ZipArchive();
 		$zip->open($path, \ZipArchive::CREATE);
 		$zip->addEmptyDir($appId);
 		$zip->addFromString(
 			$appId . '/appinfo/info.xml',
-			"<?xml version=\"1.0\"?><info><id>{$appId}</id><name>Demo</name><version>{$version}</version></info>",
+			"<?xml version=\"1.0\"?><info><id>{$appId}</id><name>Demo</name><version>{$version}</version>{$deps}</info>",
 		);
 		$zip->addFromString($appId . '/lib/AppInfo/Application.php', '<?php');
 		$zip->close();
@@ -263,6 +266,9 @@ class AppInstallServiceTest extends TestCase {
 	private function wireInstall(string $appsDir, string $installedVersion = ''): void {
 		$this->pathResolver->method('resolveWritablePath')->willReturn($appsDir);
 		$this->tempManager->method('getTemporaryFile')->willReturn($appsDir . '/upload.tmp.zip');
+		$this->config->method('getSystemValueString')->willReturnCallback(
+			static fn (string $key, string $default = '') => $key === 'version' ? '35.0.2.1' : $default,
+		);
 		$this->config->method('getAppValue')->willReturnCallback(
 			static fn (string $app, string $key, $default) => match ($key) {
 				'max_upload_size_mb' => '20',
@@ -383,6 +389,80 @@ class AppInstallServiceTest extends TestCase {
 
 		$this->assertTrue($result['isUpdate']);
 
+		$this->removeDir($appsDir);
+	}
+
+	// =========================================================================
+	// Update-only mode (per-app update permission)
+	// =========================================================================
+
+	private const COMPATIBLE_DEPS = '<dependencies><nextcloud min-version="30" max-version="35"/><php min-version="8.1"/></dependencies>';
+
+	public function testUpdateOnlyAcceptsNewerCompatibleVersionAndKeepsEnabledState(): void {
+		$appsDir = $this->makeAppsDir();
+		$this->wireInstall($appsDir, '1.0.0');
+		$this->makeExistingApp($appsDir, 'dropdemo', '1.0.0');
+		$zip = $this->makeAppZip($appsDir, 'dropdemo', '1.1.0', self::COMPATIBLE_DEPS);
+
+		$this->appManager->expects($this->never())->method('enableApp');
+
+		$result = $this->service->install(['name' => 'dropdemo.zip', 'tmp_name' => $zip, 'error' => UPLOAD_ERR_OK], true, ['dropdemo']);
+
+		$this->assertTrue($result['isUpdate']);
+		$this->assertSame('1.1.0', $result['version']);
+		$this->removeDir($appsDir);
+	}
+
+	/**
+	 * @return array<string, array{0: string, 1: string, 2: string[], 3: string}>
+	 */
+	public static function rejectedUpdateProvider(): array {
+		return [
+			'app not granted' => ['1.1.0', self::COMPATIBLE_DEPS, ['otherapp'], 'not allowed to update'],
+			'same version' => ['1.0.0', self::COMPATIBLE_DEPS, ['dropdemo'], 'not newer'],
+			'downgrade' => ['0.9.0', self::COMPATIBLE_DEPS, ['dropdemo'], 'not newer'],
+			'nextcloud too new' => ['1.1.0', '<dependencies><nextcloud min-version="30" max-version="33"/></dependencies>', ['dropdemo'], 'up to 33'],
+			'nextcloud too old' => ['1.1.0', '<dependencies><nextcloud min-version="36" max-version="37"/></dependencies>', ['dropdemo'], 'Nextcloud >= 36'],
+			'no nextcloud dependency' => ['1.1.0', '', ['dropdemo'], 'does not declare'],
+			'php too old' => ['1.1.0', '<dependencies><nextcloud min-version="30" max-version="35"/><php min-version="99.0"/></dependencies>', ['dropdemo'], 'PHP >= 99.0'],
+			'missing extension' => ['1.1.0', '<dependencies><nextcloud min-version="30" max-version="35"/><lib>appdrop_no_such_ext</lib></dependencies>', ['dropdemo'], 'appdrop_no_such_ext'],
+		];
+	}
+
+	#[DataProvider('rejectedUpdateProvider')]
+	public function testUpdateOnlyRejectsAndLeavesInstalledAppUntouched(string $version, string $deps, array $allowed, string $expected): void {
+		$appsDir = $this->makeAppsDir();
+		$this->wireInstall($appsDir, '1.0.0');
+		$this->makeExistingApp($appsDir, 'dropdemo', '1.0.0');
+		$zip = $this->makeAppZip($appsDir, 'dropdemo', $version, $deps);
+
+		$this->appManager->expects($this->never())->method('upgradeApp');
+
+		try {
+			$this->service->install(['name' => 'dropdemo.zip', 'tmp_name' => $zip, 'error' => UPLOAD_ERR_OK], true, $allowed);
+			$this->fail('Expected AppInstallException');
+		} catch (AppInstallException $e) {
+			$this->assertStringContainsString($expected, $e->getMessage());
+		}
+
+		$this->assertStringContainsString('<version>1.0.0</version>', (string)file_get_contents($appsDir . '/dropdemo/appinfo/info.xml'));
+		$this->assertSame([], glob($appsDir . '/dropdemo_backup_*') ?: [], 'No backup must be made for a rejected update');
+		$this->removeDir($appsDir);
+	}
+
+	public function testUpdateOnlyRefusesNewInstall(): void {
+		$appsDir = $this->makeAppsDir();
+		$this->wireInstall($appsDir);
+		$zip = $this->makeAppZip($appsDir, 'dropdemo', '1.0.0', self::COMPATIBLE_DEPS);
+
+		try {
+			$this->service->install(['name' => 'dropdemo.zip', 'tmp_name' => $zip, 'error' => UPLOAD_ERR_OK], true, ['dropdemo']);
+			$this->fail('Expected AppInstallException');
+		} catch (AppInstallException $e) {
+			$this->assertStringContainsString('not installed', $e->getMessage());
+		}
+
+		$this->assertDirectoryDoesNotExist($appsDir . '/dropdemo');
 		$this->removeDir($appsDir);
 	}
 }

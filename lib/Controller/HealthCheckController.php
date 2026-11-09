@@ -39,9 +39,9 @@ class HealthCheckController extends Controller {
 	 */
 	#[NoAdminRequired]
 	public function validate(): JSONResponse {
-		$denied = $this->denyIfCannotUpload();
-		if ($denied !== null) {
-			return $denied;
+		$scope = $this->uploadScope();
+		if ($scope === []) {
+			return new JSONResponse(['success' => false, 'message' => 'Access denied.'], 403);
 		}
 
 		$file = $this->request->getUploadedFile('zipFile');
@@ -62,7 +62,7 @@ class HealthCheckController extends Controller {
 		}
 
 		try {
-			$report = $this->healthCheckService->analyze($tmpPath);
+			$report = $this->healthCheckService->analyze($tmpPath, $scope);
 			return new JSONResponse($report);
 		} finally {
 			if (file_exists($tmpPath)) {

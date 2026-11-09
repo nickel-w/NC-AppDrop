@@ -21,6 +21,7 @@ Upload, validate and install custom Nextcloud app packages (.zip) directly from 
 - **Template Generator** — Generate and download a ready-to-develop Nextcloud app skeleton
 - **Upload History** — Log of all uploads with status and timestamps
 - **Permission system** — Admins can grant upload access to specific users and groups
+- **Per-app update permissions** — Admins can allow users or groups to *update* specific installed apps (no new installs). An update is only accepted if the package is newer than the installed version and the server meets all of its requirements (Nextcloud version, PHP version, PHP extensions)
 - **Dark & light theme** — Full support via Nextcloud CSS variables
 
 ## Requirements
@@ -67,7 +68,7 @@ Once enabled, **AppDrop** appears in the top navigation bar.
 | **History** | Permitted users | View past uploads with status |
 | **Generator** | Permitted users | Download a Nextcloud app skeleton to start developing |
 | **Backups** | Admins | Restore or delete backups from previous updates |
-| **Permissions** | Admins | Grant or revoke upload access to users and groups |
+| **Permissions** | Admins | Grant or revoke upload access to users and groups, and per-app update permissions |
 
 ### Settings
 

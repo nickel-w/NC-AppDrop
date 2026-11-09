@@ -9,12 +9,23 @@
 /** @var array $_ */
 $maxSizeMB = $_['maxSizeMB'] ?? 20;
 $autoEnableDefault = $_['autoEnableDefault'] ?? true;
+$canUploadAll = $_['canUploadAll'] ?? false;
+$updatableApps = $_['updatableApps'] ?? [];
 ?>
 
 <h2 class="aum-section-title"><?php p($l->t('Upload')); ?></h2>
+<?php if ($canUploadAll): ?>
 <p class="aum-subtitle">
     <?php p($l->t('Upload Nextcloud app packages (.zip) to install or update. The app ID and version are detected automatically from info.xml.')); ?>
 </p>
+<?php else: ?>
+<p class="aum-subtitle">
+    <?php p($l->t('You may update the following apps: %s', [implode(', ', $updatableApps)])); ?>
+</p>
+<p class="aum-hint">
+    <?php p($l->t('New apps cannot be installed. A package is only accepted if it is newer than the installed version and meets all requirements of this server (Nextcloud and PHP version, PHP extensions).')); ?>
+</p>
+<?php endif; ?>
 
 <div id="aum-message" class="aum-alert aum-alert--hidden" role="status" aria-live="polite"></div>
 
@@ -50,6 +61,7 @@ $autoEnableDefault = $_['autoEnableDefault'] ?? true;
     <!-- File queue -->
     <div id="aum-file-queue" class="aum-file-queue aum-file-queue--hidden"></div>
 
+    <?php if ($canUploadAll): ?>
     <!-- Options -->
     <div class="aum-field aum-field--inline">
         <label class="aum-checkbox-label">
@@ -57,6 +69,7 @@ $autoEnableDefault = $_['autoEnableDefault'] ?? true;
             <?php p($l->t('Auto-enable app after install')); ?>
         </label>
     </div>
+    <?php endif; ?>
 
     <!-- Submit -->
     <div class="aum-field">
@@ -64,7 +77,7 @@ $autoEnableDefault = $_['autoEnableDefault'] ?? true;
                 type="submit"
                 class="aum-btn aum-btn--primary">
             <span class="aum-btn__icon" aria-hidden="true">⇪</span>
-            <?php p($l->t('Install / Update')); ?>
+            <?php p($canUploadAll ? $l->t('Install / Update') : $l->t('Update')); ?>
         </button>
         <span id="aum-spinner" class="aum-spinner aum-spinner--hidden" aria-hidden="true"></span>
     </div>

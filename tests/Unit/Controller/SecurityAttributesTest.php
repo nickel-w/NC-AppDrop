@@ -45,6 +45,7 @@ class SecurityAttributesTest extends TestCase {
 		TemplateGeneratorController::class . '::generate' => [NoAdminRequired::class],
 		SettingsController::class . '::get' => [NoCSRFRequired::class],
 		PermissionController::class . '::get' => [NoCSRFRequired::class],
+		PermissionController::class . '::getUpdateGrants' => [NoCSRFRequired::class],
 		PermissionController::class . '::searchUsers' => [NoCSRFRequired::class],
 		PermissionController::class . '::searchGroups' => [NoCSRFRequired::class],
 	];

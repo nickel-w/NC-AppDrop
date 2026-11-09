@@ -44,7 +44,8 @@ class AdminController extends Controller {
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function index(): TemplateResponse {
-		if (!$this->canUpload()) {
+		$scope = $this->uploadScope();
+		if ($scope === []) {
 			return new TemplateResponse(
 				$this->appName,
 				'admin/index',
@@ -58,6 +59,8 @@ class AdminController extends Controller {
 
 		return new TemplateResponse($this->appName, 'admin/index', [
 			'isAdmin' => $this->isAdmin(),
+			'canUploadAll' => $scope === null,
+			'updatableApps' => $scope ?? [],
 			'maxSizeMB' => $maxSizeMB,
 			'autoEnableDefault' => $autoEnableDefault,
 		], TemplateResponse::RENDER_AS_USER);
@@ -68,9 +71,9 @@ class AdminController extends Controller {
 	 */
 	#[NoAdminRequired]
 	public function install(): JSONResponse {
-		$denied = $this->denyIfCannotUpload();
-		if ($denied !== null) {
-			return $denied;
+		$scope = $this->uploadScope();
+		if ($scope === []) {
+			return new JSONResponse(['success' => false, 'message' => 'Access denied.'], 403);
 		}
 
 		$file = $this->request->getUploadedFile('zipFile');
@@ -81,7 +84,9 @@ class AdminController extends Controller {
 		$autoEnable = $this->request->getParam('autoEnable', '1') === '1';
 
 		try {
-			$result = $this->installService->install($file, $autoEnable);
+			$result = $scope === null
+				? $this->installService->install($file, $autoEnable)
+				: $this->installService->install($file, false, $scope);
 
 			$user = $this->userSession->getUser();
 			$userId = $user !== null ? $user->getUID() : 'unknown';

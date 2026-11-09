@@ -47,7 +47,7 @@ class Application extends App implements IBootstrap {
 			}
 
 			$permissionService = $server->get(PermissionService::class);
-			if (!$permissionService->canUpload($user)) {
+			if (!$permissionService->canAccess($user)) {
 				return;
 			}
 		} catch (\Throwable) {

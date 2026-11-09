@@ -749,6 +749,56 @@
     font-size: 0.9em;
 }
 
+/* Per-app update grants */
+.aum-grant-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: flex-start;
+    margin: 12px 0;
+}
+
+.aum-grant-form select {
+    min-width: 160px;
+}
+
+.aum-grant-form .aum-perm-search {
+    flex: 1;
+    min-width: 200px;
+    margin-bottom: 0;
+}
+
+.aum-grant-app {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.aum-grant-app__entries {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.aum-grant-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 4px 2px 10px;
+    border: 1px solid var(--color-border, #ddd);
+    border-radius: 999px;
+    font-size: 0.85em;
+}
+
+.aum-grant-chip button {
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    min-height: 0;
+    color: var(--color-error, #c00);
+}
+
 /* ── Autocomplete ───────────────────────────────────────────────────────── */
 .aum-autocomplete {
     position: absolute;

@@ -36,3 +36,26 @@
     </div>
     <ul id="aum-perm-user-list" class="aum-perm-list"></ul>
 </div>
+
+<!-- Per-app update permissions -->
+<div class="aum-perm-block">
+    <h3 class="aum-perm-heading"><?php p($l->t('Update permissions for individual apps')); ?></h3>
+    <p class="aum-hint">
+        <?php p($l->t('Users and groups listed here may only update the selected app — they cannot install new apps. An update is only accepted if the package is newer than the installed version and meets all requirements of this server (Nextcloud and PHP version, PHP extensions).')); ?>
+    </p>
+    <div class="aum-grant-form">
+        <select id="aum-grant-app" class="aum-input" aria-label="<?php p($l->t('App')); ?>">
+            <option value=""><?php p($l->t('Select app...')); ?></option>
+        </select>
+        <select id="aum-grant-type" class="aum-input" aria-label="<?php p($l->t('Type')); ?>">
+            <option value="group"><?php p($l->t('Group')); ?></option>
+            <option value="user"><?php p($l->t('User')); ?></option>
+        </select>
+        <div class="aum-perm-search">
+            <input id="aum-grant-search" type="text" class="aum-input"
+                   placeholder="<?php p($l->t('Search users or groups...')); ?>" autocomplete="off">
+            <div id="aum-grant-results" class="aum-autocomplete"></div>
+        </div>
+    </div>
+    <ul id="aum-grant-list" class="aum-perm-list"></ul>
+</div>

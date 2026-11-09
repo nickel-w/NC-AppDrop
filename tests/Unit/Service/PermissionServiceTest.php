@@ -192,4 +192,81 @@ class PermissionServiceTest extends TestCase {
 
 		$this->service->removeGroup('editors');
 	}
+
+	// =========================================================================
+	// Per-app update grants
+	// =========================================================================
+
+	private function withGrants(string $json): void {
+		$this->config->method('getAppValue')->willReturnMap([
+			['appdrop', 'allowed_users', '[]', '[]'],
+			['appdrop', 'allowed_groups', '[]', '[]'],
+			['appdrop', 'update_grants', '{}', $json],
+		]);
+	}
+
+	private function user(string $uid): IUser {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($uid);
+		return $user;
+	}
+
+	public function testUpdatableAppsViaUserAndGroup(): void {
+		$this->withGrants('{"zeta":{"users":["dave"],"groups":[]},"alpha":{"users":[],"groups":["editors"]},"other":{"users":["erin"],"groups":["ops"]}}');
+		$this->groupManager->method('isInGroup')->willReturnCallback(
+			static fn (string $uid, string $gid) => $uid === 'dave' && $gid === 'editors',
+		);
+
+		$this->assertSame(['alpha', 'zeta'], $this->service->getUpdatableApps($this->user('dave')));
+		$this->assertTrue($this->service->canUpdateApp($this->user('dave'), 'zeta'));
+		$this->assertFalse($this->service->canUpdateApp($this->user('dave'), 'other'));
+		$this->assertTrue($this->service->canAccess($this->user('dave')));
+		$this->assertFalse($this->service->canUpload($this->user('dave')), 'Update grants must not grant full upload permission');
+	}
+
+	public function testNoGrantsMeansNoAccess(): void {
+		$this->withGrants('{}');
+		$this->groupManager->method('isInGroup')->willReturn(false);
+
+		$this->assertSame([], $this->service->getUpdatableApps($this->user('nobody')));
+		$this->assertFalse($this->service->canAccess($this->user('nobody')));
+		$this->assertSame([], $this->service->getUpdatableApps(null));
+	}
+
+	public function testCorruptGrantsAreIgnored(): void {
+		$this->withGrants('not json');
+		$this->assertSame([], $this->service->getUpdateGrants());
+	}
+
+	public function testAddUpdateGrantStoresEntry(): void {
+		$this->withGrants('{"alpha":{"users":["dave"],"groups":[]}}');
+		$this->config->expects($this->once())->method('setAppValue')->with(
+			'appdrop',
+			'update_grants',
+			'{"alpha":{"users":["dave"],"groups":["editors"]}}',
+		);
+
+		$this->service->addUpdateGrant('alpha', 'group', 'editors');
+	}
+
+	public function testRemovingLastEntryDropsTheApp(): void {
+		$this->withGrants('{"alpha":{"users":["dave"],"groups":[]}}');
+		$this->config->expects($this->once())->method('setAppValue')->with('appdrop', 'update_grants', '{}');
+
+		$this->service->removeUpdateGrant('alpha', 'user', 'dave');
+	}
+
+	public function testAddUpdateGrantRejectsInvalidInput(): void {
+		$this->withGrants('{}');
+		$this->config->expects($this->never())->method('setAppValue');
+
+		foreach ([['Bad-App', 'user', 'x'], ['alpha', 'admin', 'x'], ['alpha', 'user', '']] as [$app, $type, $id]) {
+			try {
+				$this->service->addUpdateGrant($app, $type, $id);
+				$this->fail("Expected rejection for {$app}/{$type}/{$id}");
+			} catch (\InvalidArgumentException) {
+				$this->addToAssertionCount(1);
+			}
+		}
+	}
 }
