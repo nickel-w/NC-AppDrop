@@ -20,7 +20,7 @@ class TemplateGeneratorServiceTest extends TestCase {
 	protected function setUp(): void {
 		$this->tempManager = $this->createMock(ITempManager::class);
 		$this->config = $this->createMock(IConfig::class);
-		$this->config->method('getSystemValueString')->with('version', '')->willReturn('33.0.8.2');
+		$this->config->method('getSystemValueString')->with('version', '')->willReturn('35.0.2.1');
 		$this->service = new TemplateGeneratorService($this->tempManager, $this->config);
 		$this->tmpDir = sys_get_temp_dir() . '/appdrop_gen_' . uniqid();
 		mkdir($this->tmpDir, 0755, true);
@@ -138,8 +138,8 @@ class TemplateGeneratorServiceTest extends TestCase {
 		$infoXml = $zip->getFromName('my_app/appinfo/info.xml');
 		$zip->close();
 
-		// Server is 33.0.8.2 (see setUp): a skeleton generated here must be installable here.
-		$this->assertStringContainsString('<nextcloud min-version="30" max-version="33"/>', $infoXml);
+		// Server is 35.0.2.1 (see setUp): a skeleton generated here must be installable here.
+		$this->assertStringContainsString('<nextcloud min-version="30" max-version="35"/>', $infoXml);
 	}
 
 	public function testGenerateInfoXmlMaxVersionOnOlderServer(): void {

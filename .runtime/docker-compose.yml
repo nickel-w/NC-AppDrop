@@ -7,7 +7,7 @@
 
 services:
   app:
-    image: nextcloud:30
+    image: nextcloud:35
     environment:
       SQLITE_DATABASE: nextcloud
       NEXTCLOUD_ADMIN_USER: admin

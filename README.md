@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/cdnCore-Pt/AppDrop/actions/workflows/ci.yml/badge.svg)](https://github.com/cdnCore-Pt/AppDrop/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Nextcloud: 30-33](https://img.shields.io/badge/Nextcloud-30--33-0082c9.svg)](https://apps.nextcloud.com/apps/appdrop)
+[![Nextcloud: 30-35](https://img.shields.io/badge/Nextcloud-30--35-0082c9.svg)](https://apps.nextcloud.com/apps/appdrop)
 [![PHP: 8.1+](https://img.shields.io/badge/PHP-8.1%2B-777BB4.svg)](https://www.php.net/)
 [![Built by cdnCore](https://img.shields.io/badge/Built_by-cdnCore-1f2937.svg)](https://cdncore.eu/)
 
@@ -25,8 +25,8 @@ Upload, validate and install custom Nextcloud app packages (.zip) directly from 
 
 ## Requirements
 
-- Nextcloud 30 – 33
-- PHP 8.1+
+- Nextcloud 30 – 35
+- PHP 8.1+ (tested up to 8.5)
 
 ## Installation
 
